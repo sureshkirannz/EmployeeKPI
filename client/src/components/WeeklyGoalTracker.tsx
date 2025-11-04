@@ -173,18 +173,37 @@ export default function WeeklyGoalTracker() {
     );
 
     if (currentActivity) {
-      setGoals({
-        faceToFaceMeetings: currentActivity.faceToFaceMeetings,
-        events: currentActivity.events,
-        videos: currentActivity.videos,
-        hoursProspected: parseFloat(currentActivity.hoursProspected),
-        thankyouCards: currentActivity.thankyouCards,
-        leadsReceived: currentActivity.leadsReceived,
-      });
       // Load daily values from saved activity if available
       if (currentActivity.dailyBreakdown) {
-        setDailyValues(currentActivity.dailyBreakdown);
+        const breakdown = currentActivity.dailyBreakdown;
+        setDailyValues(breakdown);
+        
+        // Recalculate totals from daily breakdown
+        const ftfTotal = breakdown.faceToFaceMeetings.flat().reduce((sum, v) => sum + v, 0);
+        const eventsTotal = breakdown.events.reduce((sum, v) => sum + v, 0);
+        const videosTotal = breakdown.videos.reduce((sum, v) => sum + v, 0);
+        const hoursTotal = breakdown.hoursProspected.reduce((sum, v) => sum + v, 0);
+        const thankyouTotal = breakdown.thankyouCards.flat().reduce((sum, v) => sum + v, 0);
+        const leadsTotal = breakdown.leadsReceived.reduce((sum, v) => sum + v, 0);
+        
+        setGoals({
+          faceToFaceMeetings: ftfTotal,
+          events: eventsTotal,
+          videos: videosTotal,
+          hoursProspected: hoursTotal,
+          thankyouCards: thankyouTotal,
+          leadsReceived: leadsTotal,
+        });
       } else {
+        // No daily breakdown, use database totals
+        setGoals({
+          faceToFaceMeetings: currentActivity.faceToFaceMeetings,
+          events: currentActivity.events,
+          videos: currentActivity.videos,
+          hoursProspected: parseFloat(currentActivity.hoursProspected),
+          thankyouCards: currentActivity.thankyouCards,
+          leadsReceived: currentActivity.leadsReceived,
+        });
         setDailyValues({
           faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
           events: Array(6).fill(0),
