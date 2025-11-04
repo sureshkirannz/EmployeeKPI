@@ -1,60 +1,185 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { format, startOfWeek, endOfWeek } from "date-fns";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
-interface WeeklyGoals {
-  faceToFaceMeetings1: number;
-  faceToFaceMeetings2: number;
-  faceToFaceMeetings3: number;
+interface WeeklyActivity {
+  id?: string;
+  employeeId: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  faceToFaceMeetings: number;
   events: number;
   videos: number;
-  hoursProspected: number;
-  thankYouCards1: number;
-  thankYouCards2: number;
+  hoursProspected: string;
+  thankyouCards: number;
   leadsReceived: number;
 }
 
-interface WeeklyGoalTrackerProps {
-  weekStart: Date;
-  weekEnd: Date;
-  onSubmit: (goals: WeeklyGoals) => void;
-}
-
-export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: WeeklyGoalTrackerProps) {
-  const [goals, setGoals] = useState<WeeklyGoals>({
-    faceToFaceMeetings1: 0,
-    faceToFaceMeetings2: 0,
-    faceToFaceMeetings3: 0,
+export default function WeeklyGoalTracker() {
+  const [selectedWeek, setSelectedWeek] = useState<Date>(new Date());
+  const [goals, setGoals] = useState({
+    faceToFaceMeetings: 0,
     events: 0,
     videos: 0,
     hoursProspected: 0,
-    thankYouCards1: 0,
-    thankYouCards2: 0,
+    thankyouCards: 0,
     leadsReceived: 0,
+  });
+  const { toast } = useToast();
+
+  const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });
+
+  const { data: activitiesData } = useQuery<{ activities: WeeklyActivity[] }>({
+    queryKey: ["/api/employee/weekly-activities"],
+  });
+
+  const saveActivityMutation = useMutation({
+    mutationFn: async (activity: Partial<WeeklyActivity>) => {
+      const weekStartStr = format(weekStart, "yyyy-MM-dd");
+      const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+
+      // Check if activity exists for this week
+      const existingActivity = activitiesData?.activities?.find(
+        (a) => a.weekStartDate === weekStartStr
+      );
+
+      if (existingActivity) {
+        // Update existing
+        const response = await apiRequest("PUT", `/api/employee/weekly-activities/${existingActivity.id}`, activity);
+        return await response.json();
+      } else {
+        // Create new
+        const response = await apiRequest("POST", "/api/employee/weekly-activities", {
+          ...activity,
+          weekStartDate: weekStartStr,
+          weekEndDate: weekEndStr,
+        });
+        return await response.json();
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employee/weekly-activities"] });
+      toast({ title: "Success", description: "Weekly activity saved" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save activity",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(goals);
+
+    // Validate constraints
+    if (goals.faceToFaceMeetings > 3) {
+      toast({
+        title: "Validation Error",
+        description: "Maximum 3 face-to-face meetings per week",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (goals.thankyouCards > 2) {
+      toast({
+        title: "Validation Error",
+        description: "Maximum 2 thank you cards per week",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    saveActivityMutation.mutate({
+      faceToFaceMeetings: goals.faceToFaceMeetings,
+      events: goals.events,
+      videos: goals.videos,
+      hoursProspected: goals.hoursProspected.toString(),
+      thankyouCards: goals.thankyouCards,
+      leadsReceived: goals.leadsReceived,
+    });
   };
 
-  const updateGoal = (field: keyof WeeklyGoals, value: string) => {
+  const updateGoal = (field: keyof typeof goals, value: string) => {
     setGoals({ ...goals, [field]: parseFloat(value) || 0 });
   };
 
   const days = ["Mon", "Tues", "Wed", "Thurs", "Fri", "Weekend"];
 
+  // Load existing activity for selected week when data or week changes
+  useEffect(() => {
+    const weekStartStr = format(weekStart, "yyyy-MM-dd");
+    const currentActivity = activitiesData?.activities?.find(
+      (a) => a.weekStartDate === weekStartStr
+    );
+
+    if (currentActivity) {
+      setGoals({
+        faceToFaceMeetings: currentActivity.faceToFaceMeetings,
+        events: currentActivity.events,
+        videos: currentActivity.videos,
+        hoursProspected: parseFloat(currentActivity.hoursProspected),
+        thankyouCards: currentActivity.thankyouCards,
+        leadsReceived: currentActivity.leadsReceived,
+      });
+    } else {
+      // Reset to empty state for new week
+      setGoals({
+        faceToFaceMeetings: 0,
+        events: 0,
+        videos: 0,
+        hoursProspected: 0,
+        thankyouCards: 0,
+        leadsReceived: 0,
+      });
+    }
+  }, [activitiesData, weekStart]);
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <CardTitle className="text-xl">Weekly Goal Tracker</CardTitle>
-          <div className="text-sm text-muted-foreground">
-            {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" data-testid="button-select-week">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedWeek}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedWeek(date);
+                    setGoals({
+                      faceToFaceMeetings: 0,
+                      events: 0,
+                      videos: 0,
+                      hoursProspected: 0,
+                      thankyouCards: 0,
+                      leadsReceived: 0,
+                    });
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </CardHeader>
       <CardContent>
@@ -86,19 +211,33 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                         step="0.1"
                         className="h-9 text-center"
                         placeholder="0"
+                        disabled
                         data-testid={`input-ftf-${num}-${idx}`}
                       />
                     ))}
                     <Input
                       type="number"
-                      value={goals[`faceToFaceMeetings${num}` as keyof WeeklyGoals]}
-                      onChange={(e) => updateGoal(`faceToFaceMeetings${num}` as keyof WeeklyGoals, e.target.value)}
-                      className="h-9 text-center font-mono font-semibold"
+                      className="h-9 text-center font-mono font-semibold bg-muted"
                       placeholder="0"
+                      disabled
                       data-testid={`input-ftf-total-${num}`}
                     />
                   </div>
                 ))}
+                <div className="grid grid-cols-8 gap-2 items-center">
+                  <div className="text-sm font-semibold">Total</div>
+                  <div className="col-span-6"></div>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="3"
+                    value={goals.faceToFaceMeetings}
+                    onChange={(e) => updateGoal("faceToFaceMeetings", e.target.value)}
+                    className="h-9 text-center font-mono font-semibold"
+                    placeholder="0"
+                    data-testid="input-ftf-total"
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">Max 3 per week</p>
               </div>
 
@@ -113,6 +252,7 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                     step="0.1"
                     className="h-9 text-center"
                     placeholder="0"
+                    disabled
                     data-testid={`input-events-${idx}`}
                   />
                 ))}
@@ -137,6 +277,7 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                     step="0.1"
                     className="h-9 text-center"
                     placeholder="0"
+                    disabled
                     data-testid={`input-videos-${idx}`}
                   />
                 ))}
@@ -161,6 +302,7 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                     step="0.5"
                     className="h-9 text-center"
                     placeholder="0"
+                    disabled
                     data-testid={`input-hours-${idx}`}
                   />
                 ))}
@@ -168,6 +310,7 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                   type="number"
                   value={goals.hoursProspected}
                   onChange={(e) => updateGoal("hoursProspected", e.target.value)}
+                  step="0.5"
                   className="h-9 text-center font-mono font-semibold"
                   placeholder="0"
                   data-testid="input-hours-total"
@@ -188,19 +331,33 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                         step="0.1"
                         className="h-9 text-center"
                         placeholder="0"
+                        disabled
                         data-testid={`input-thankyou-${num}-${idx}`}
                       />
                     ))}
                     <Input
                       type="number"
-                      value={goals[`thankYouCards${num}` as keyof WeeklyGoals]}
-                      onChange={(e) => updateGoal(`thankYouCards${num}` as keyof WeeklyGoals, e.target.value)}
-                      className="h-9 text-center font-mono font-semibold"
+                      className="h-9 text-center font-mono font-semibold bg-muted"
                       placeholder="0"
+                      disabled
                       data-testid={`input-thankyou-total-${num}`}
                     />
                   </div>
                 ))}
+                <div className="grid grid-cols-8 gap-2 items-center">
+                  <div className="text-sm font-semibold">Total</div>
+                  <div className="col-span-6"></div>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="2"
+                    value={goals.thankyouCards}
+                    onChange={(e) => updateGoal("thankyouCards", e.target.value)}
+                    className="h-9 text-center font-mono font-semibold"
+                    placeholder="0"
+                    data-testid="input-thankyou-total"
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">Max 2 per week</p>
               </div>
 
@@ -215,6 +372,7 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
                     step="1"
                     className="h-9 text-center"
                     placeholder="0"
+                    disabled
                     data-testid={`input-leads-${idx}`}
                   />
                 ))}
@@ -230,9 +388,13 @@ export default function WeeklyGoalTracker({ weekStart, weekEnd, onSubmit }: Week
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" data-testid="button-save-goals">
-              Save Weekly Goals
+          <div className="flex justify-end gap-2">
+            <Button
+              type="submit"
+              disabled={saveActivityMutation.isPending}
+              data-testid="button-save-goals"
+            >
+              {saveActivityMutation.isPending ? "Saving..." : "Save Weekly Goals"}
             </Button>
           </div>
         </form>

@@ -232,6 +232,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes - Reports and analytics
+  app.get("/api/admin/reports/overview", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const employees = await storage.getAllUsers();
+      const currentYear = new Date().getFullYear();
+
+      const employeeData = await Promise.all(
+        employees
+          .filter((e) => e.role === "employee")
+          .map(async (employee) => {
+            const kpiTarget = await storage.getEmployeeKpiTarget(employee.id, currentYear);
+            const salesTarget = await storage.getEmployeeSalesTarget(employee.id, currentYear);
+            const activities = await storage.getWeeklyActivitiesForEmployee(employee.id);
+
+            return {
+              id: employee.id,
+              name: employee.employeeName,
+              kpiTarget,
+              salesTarget,
+              weeklyActivityCount: activities.length,
+            };
+          })
+      );
+
+      return res.json({ employeeData });
+    } catch (error) {
+      console.error("Get admin overview error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Employee routes - Weekly activities
   app.get("/api/employee/weekly-activities", requireAuth, async (req: AuthRequest, res) => {
     try {
@@ -271,6 +302,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ activity });
     } catch (error) {
       console.error("Update weekly activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Employee routes - Calculate KPI progress
+  app.get("/api/employee/kpi-progress", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+
+      const kpiTarget = await storage.getEmployeeKpiTarget(req.userId!, currentYear);
+      const activities = await storage.getWeeklyActivitiesForEmployee(req.userId!);
+
+      if (!kpiTarget) {
+        return res.json({ progress: null });
+      }
+
+      // Calculate totals from weekly activities for current year
+      const currentYearActivities = activities.filter((a) => {
+        const activityYear = new Date(a.weekStartDate).getFullYear();
+        return activityYear === currentYear;
+      });
+
+      const currentMonthActivities = activities.filter((a) => {
+        const activityDate = new Date(a.weekStartDate);
+        return activityDate.getFullYear() === currentYear && activityDate.getMonth() + 1 === currentMonth;
+      });
+
+      const yearTotals = currentYearActivities.reduce(
+        (acc, activity) => ({
+          events: acc.events + activity.events,
+          meetings: acc.meetings + activity.faceToFaceMeetings,
+          videos: acc.videos + activity.videos,
+          thankyouCards: acc.thankyouCards + activity.thankyouCards,
+          leadsReceived: acc.leadsReceived + activity.leadsReceived,
+          hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
+        }),
+        { events: 0, meetings: 0, videos: 0, thankyouCards: 0, leadsReceived: 0, hoursProspected: 0 }
+      );
+
+      const monthTotals = currentMonthActivities.reduce(
+        (acc, activity) => ({
+          events: acc.events + activity.events,
+          meetings: acc.meetings + activity.faceToFaceMeetings,
+          videos: acc.videos + activity.videos,
+          thankyouCards: acc.thankyouCards + activity.thankyouCards,
+          leadsReceived: acc.leadsReceived + activity.leadsReceived,
+          hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
+        }),
+        { events: 0, meetings: 0, videos: 0, thankyouCards: 0, leadsReceived: 0, hoursProspected: 0 }
+      );
+
+      // Mock actual loan data (in real app, this would come from loan tracking system)
+      const mockCurrentVolume = parseFloat(kpiTarget.annualVolumeGoal) * 0.45; // 45% progress
+      const mockUnitsThisMonth = Math.floor(kpiTarget.requiredUnitsMonthly * 0.75); // 75% progress
+      const mockLockedLoansThisMonth = Math.floor(kpiTarget.lockedLoansMonthly * 0.85); // 85% progress
+
+      // Generate weekly breakdown from current month activities
+      const weeklyBreakdown = [];
+      const weeklyActivityMap = new Map<number, any>();
+      
+      currentMonthActivities.forEach((activity) => {
+        const weekNum = Math.ceil(new Date(activity.weekStartDate).getDate() / 7);
+        if (!weeklyActivityMap.has(weekNum)) {
+          weeklyActivityMap.set(weekNum, {
+            weekNumber: weekNum,
+            events: 0,
+            meetings: 0,
+            videos: 0,
+            thankyouCards: 0,
+            leadsReceived: 0,
+            hoursProspected: 0,
+          });
+        }
+        const week = weeklyActivityMap.get(weekNum);
+        week.events += activity.events;
+        week.meetings += activity.faceToFaceMeetings;
+        week.videos += activity.videos;
+        week.thankyouCards += activity.thankyouCards;
+        week.leadsReceived += activity.leadsReceived;
+        week.hoursProspected += parseFloat(activity.hoursProspected);
+      });
+      
+      for (let i = 1; i <= 4; i++) {
+        weeklyBreakdown.push(weeklyActivityMap.get(i) || {
+          weekNumber: i,
+          events: 0,
+          meetings: 0,
+          videos: 0,
+          thankyouCards: 0,
+          leadsReceived: 0,
+          hoursProspected: 0,
+        });
+      }
+
+      // Generate monthly breakdown for all months in current year
+      const monthlyBreakdown = [];
+      for (let monthNum = 1; monthNum <= 12; monthNum++) {
+        const monthActivities = currentYearActivities.filter((a) => {
+          const activityMonth = new Date(a.weekStartDate).getMonth() + 1;
+          return activityMonth === monthNum;
+        });
+
+        const monthTotal = monthActivities.reduce(
+          (acc, activity) => ({
+            events: acc.events + activity.events,
+            meetings: acc.meetings + activity.faceToFaceMeetings,
+            videos: acc.videos + activity.videos,
+            thankyouCards: acc.thankyouCards + activity.thankyouCards,
+            leadsReceived: acc.leadsReceived + activity.leadsReceived,
+            hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
+          }),
+          { events: 0, meetings: 0, videos: 0, thankyouCards: 0, leadsReceived: 0, hoursProspected: 0 }
+        );
+
+        monthlyBreakdown.push({
+          month: monthNum,
+          ...monthTotal,
+          activityCount: monthActivities.length,
+        });
+      }
+
+      return res.json({
+        progress: {
+          // Actual loan metrics (mocked for now - would come from loan system)
+          volumeCompleted: mockCurrentVolume,
+          unitsThisMonth: mockUnitsThisMonth,
+          lockedLoansThisMonth: mockLockedLoansThisMonth,
+          // Activity metrics from weekly tracking
+          yearTotals,
+          monthTotals,
+          weeklyBreakdown,
+          monthlyBreakdown,
+          activitiesThisYear: currentYearActivities.length,
+          activitiesThisMonth: currentMonthActivities.length,
+        },
+      });
+    } catch (error) {
+      console.error("Get KPI progress error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });

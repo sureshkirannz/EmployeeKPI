@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Edit, Trash2, Plus } from "lucide-react";
+import { Edit, Trash2, Plus, Target } from "lucide-react";
 
 interface Employee {
   id: string;
@@ -19,9 +19,10 @@ interface EmployeeTableProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: () => void;
+  onSetTargets?: (id: string) => void;
 }
 
-export default function EmployeeTable({ employees, onEdit, onDelete, onAdd }: EmployeeTableProps) {
+export default function EmployeeTable({ employees, onEdit, onDelete, onAdd, onSetTargets }: EmployeeTableProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "behind":
@@ -92,6 +93,17 @@ export default function EmployeeTable({ employees, onEdit, onDelete, onAdd }: Em
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {onSetTargets && employee.role === "employee" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onSetTargets(employee.id)}
+                          data-testid={`button-targets-${employee.id}`}
+                          title="Set KPI Targets"
+                        >
+                          <Target className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

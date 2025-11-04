@@ -9,7 +9,9 @@ import KPICard from "./KPICard";
 import EmployeeTable from "./EmployeeTable";
 import EmployeeFormDialog from "./EmployeeFormDialog";
 import DeleteConfirmDialog from "./DeleteConfirmDialog";
+import KPITargetDialog from "./KPITargetDialog";
 import ProgressChart from "./ProgressChart";
+import AdminReports from "./AdminReports";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -26,8 +28,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [activeView, setActiveView] = useState("dashboard");
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [targetDialogOpen, setTargetDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const [employeeForTargets, setEmployeeForTargets] = useState<Employee | null>(null);
   const { toast } = useToast();
 
   const { data: employeesData, isLoading } = useQuery<{ employees: Employee[] }>({
@@ -114,6 +118,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const handleDeleteEmployee = (id: string) => {
     setEmployeeToDelete(id);
     setDeleteDialogOpen(true);
+  };
+
+  const handleSetTargets = (id: string) => {
+    const employee = employeesData?.employees.find((e: Employee) => e.id === id);
+    if (employee) {
+      setEmployeeForTargets(employee);
+      setTargetDialogOpen(true);
+    }
   };
 
   const handleSubmitEmployee = async (employee: any) => {
@@ -263,23 +275,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                     onEdit={handleEditEmployee}
                     onDelete={handleDeleteEmployee}
                     onAdd={handleAddEmployee}
+                    onSetTargets={handleSetTargets}
                   />
                 )}
               </div>
             )}
 
             {activeView === "reports" && (
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold">Performance Reports</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <ProgressChart
-                    title="Year-to-Date Volume by Employee"
-                    data={chartData}
-                    type="bar"
-                    height={400}
-                  />
-                </div>
-              </div>
+              <AdminReports />
             )}
 
             {activeView === "settings" && (
@@ -307,6 +310,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         description="Are you sure you want to delete this employee? This action cannot be undone and will remove all associated KPI data."
         isDeleting={deleteEmployeeMutation.isPending}
       />
+
+      {employeeForTargets && (
+        <KPITargetDialog
+          open={targetDialogOpen}
+          onClose={() => {
+            setTargetDialogOpen(false);
+            setEmployeeForTargets(null);
+          }}
+          employeeId={employeeForTargets.id}
+          employeeName={employeeForTargets.employeeName}
+        />
+      )}
     </SidebarProvider>
   );
 }
