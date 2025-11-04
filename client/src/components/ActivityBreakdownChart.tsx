@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from "recharts";
 
 interface ActivityData {
   name: string;
@@ -9,6 +9,7 @@ interface ActivityData {
   thankyouCards?: number;
   hoursProspected?: number;
   leadsReceived?: number;
+  target?: number;
 }
 
 interface ActivityBreakdownChartProps {
@@ -16,6 +17,7 @@ interface ActivityBreakdownChartProps {
   data: ActivityData[];
   type?: "stacked" | "grouped";
   height?: number;
+  showTarget?: boolean;
 }
 
 export default function ActivityBreakdownChart({
@@ -23,7 +25,10 @@ export default function ActivityBreakdownChart({
   data,
   type = "stacked",
   height = 300,
+  showTarget = false,
 }: ActivityBreakdownChartProps) {
+  const ChartComponent = showTarget ? ComposedChart : BarChart;
+  
   return (
     <Card>
       <CardHeader>
@@ -31,7 +36,7 @@ export default function ActivityBreakdownChart({
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
-          <BarChart
+          <ChartComponent
             data={data}
             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
           >
@@ -81,7 +86,19 @@ export default function ActivityBreakdownChart({
               name="Hours Prospected"
               data-testid="bar-hours"
             />
-          </BarChart>
+            {showTarget && data[0]?.target !== undefined && (
+              <Line
+                type="monotone"
+                dataKey="target"
+                stroke="#ef4444"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                name="Target"
+                dot={false}
+                data-testid="line-target"
+              />
+            )}
+          </ChartComponent>
         </ResponsiveContainer>
       </CardContent>
     </Card>
