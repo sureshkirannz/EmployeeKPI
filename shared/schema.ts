@@ -122,17 +122,93 @@ export type TopRealtor = typeof topRealtors.$inferSelect;
 export const loans = pgTable("loans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  borrowerName: text("borrower_name"),
   loanAmount: decimal("loan_amount", { precision: 12, scale: 2 }).notNull(),
-  status: text("status").notNull().default("new"),
+  loanType: text("loan_type").notNull().default("purchase"),
+  status: text("status").notNull().default("lead"),
   lockedDate: date("locked_date"),
   closedDate: date("closed_date"),
+  expectedCloseDate: date("expected_close_date"),
+  referralSource: text("referral_source"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const insertLoanSchema = createInsertSchema(loans).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export type InsertLoan = z.infer<typeof insertLoanSchema>;
 export type Loan = typeof loans.$inferSelect;
+
+export const dailyActivities = pgTable("daily_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  activityDate: date("activity_date").notNull(),
+  callsMade: integer("calls_made").notNull().default(0),
+  appointmentsScheduled: integer("appointments_scheduled").notNull().default(0),
+  appointmentsCompleted: integer("appointments_completed").notNull().default(0),
+  applicationsSubmitted: integer("applications_submitted").notNull().default(0),
+  preQualsCompleted: integer("pre_quals_completed").notNull().default(0),
+  creditPulls: integer("credit_pulls").notNull().default(0),
+  followUps: integer("follow_ups").notNull().default(0),
+  realtorMeetings: integer("realtor_meetings").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertDailyActivitySchema = createInsertSchema(dailyActivities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDailyActivity = z.infer<typeof insertDailyActivitySchema>;
+export type DailyActivity = typeof dailyActivities.$inferSelect;
+
+export const coachingNotes = pgTable("coaching_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  noteType: text("note_type").notNull().default("feedback"),
+  subject: text("subject").notNull(),
+  content: text("content").notNull(),
+  actionItems: text("action_items"),
+  isPrivate: integer("is_private").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCoachingNoteSchema = createInsertSchema(coachingNotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCoachingNote = z.infer<typeof insertCoachingNoteSchema>;
+export type CoachingNote = typeof coachingNotes.$inferSelect;
+
+export const realtorPartners = pgTable("realtor_partners", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  company: text("company"),
+  phone: text("phone"),
+  email: text("email"),
+  lastContactDate: date("last_contact_date"),
+  relationshipStrength: text("relationship_strength").notNull().default("new"),
+  loansReferred: integer("loans_referred").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertRealtorPartnerSchema = createInsertSchema(realtorPartners).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertRealtorPartner = z.infer<typeof insertRealtorPartnerSchema>;
+export type RealtorPartner = typeof realtorPartners.$inferSelect;

@@ -2,380 +2,279 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogOut } from "lucide-react";
-import KPICard from "./KPICard";
-import WeeklyGoalTracker from "./WeeklyGoalTracker";
-import DateRangeSelector, { DateRangeType } from "./DateRangeSelector";
-import ProgressChart from "./ProgressChart";
-import ActivityBreakdownChart from "./ActivityBreakdownChart";
-import { DollarSign, Target, TrendingUp, Percent } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LogOut, DollarSign, FileText, TrendingUp, Percent, Target, Users, Award } from "lucide-react";
+import type { Loan, DailyActivity, CoachingNote } from "@shared/schema";
+import DailyActivityLog from "./DailyActivityLog";
+import LoanPipelineBoard from "./LoanPipelineBoard";
+import RealtorRelationships from "./RealtorRelationships";
 
 interface EmployeeDashboardProps {
   employeeName: string;
   onLogout: () => void;
 }
 
-interface KPITarget {
-  id: string;
-  employeeId: string;
-  year: number;
-  annualVolumeGoal: string;
-  avgLoanAmount: string;
-  requiredUnitsMonthly: number;
-  lockPercentage: string;
-  lockedLoansMonthly: number;
-  newFileToLockedPercentage: string;
-  newFilesMonthly: string;
-}
-
-interface SalesTarget {
-  id: string;
-  employeeId: string;
-  year: number;
-  eventsTarget: number;
-  meetingsTarget: number;
-  thankyouTarget: number;
-  prospectingTarget: number;
-  videosTarget: number;
-}
-
 export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDashboardProps) {
-  const [dateRange, setDateRange] = useState<DateRangeType>("current-week");
   const currentYear = new Date().getFullYear();
 
-  const { data: kpiData } = useQuery<{ target: KPITarget | null }>({
-    queryKey: ["/api/employee/kpi-targets", currentYear],
+  const { data: loansData } = useQuery<{ loans: Loan[] }>({
+    queryKey: ["/api/employee/loans", { year: currentYear }],
   });
 
-  const { data: salesData } = useQuery<{ target: SalesTarget | null }>({
-    queryKey: ["/api/employee/sales-targets", currentYear],
+  const { data: dailyActivitiesData } = useQuery<{ activities: DailyActivity[] }>({
+    queryKey: ["/api/employee/daily-activities"],
   });
 
-  const { data: progressData } = useQuery<{ progress: any | null }>({
-    queryKey: ["/api/employee/kpi-progress"],
+  const { data: coachingNotesData } = useQuery<{ notes: CoachingNote[] }>({
+    queryKey: ["/api/employee/coaching-notes"],
   });
 
-  const handleDateRangeChange = (type: DateRangeType, customDates?: { from: Date; to: Date }) => {
-    setDateRange(type);
-  };
+  const loans = loansData?.loans || [];
+  const dailyActivities = dailyActivitiesData?.activities || [];
+  const coachingNotes = coachingNotesData?.notes || [];
 
-  const kpiTarget = kpiData?.target;
-  const salesTarget = salesData?.target;
-  const progress = progressData?.progress;
+  // Calculate KPIs
+  const applicationsCount = loans.filter(
+    (l) => l.status === "application" || l.status === "processing" || l.status === "locked" || l.status === "closed"
+  ).length;
 
-  // Calculate progress percentages from real data
-  const volumeProgress = kpiTarget && progress
-    ? Math.round((progress.volumeCompleted / parseFloat(kpiTarget.annualVolumeGoal)) * 100)
-    : 0;
+  const fundedLoans = loans.filter((l) => l.status === "closed");
+  const fundedCount = fundedLoans.length;
+  const fundedVolume = fundedLoans.reduce((sum, l) => sum + parseFloat(l.loanAmount || "0"), 0);
 
-  const unitsProgress = kpiTarget && progress
-    ? Math.round((progress.unitsThisMonth / kpiTarget.requiredUnitsMonthly) * 100)
-    : 0;
+  const pipelineValue = loans
+    .filter((l) => l.status !== "closed")
+    .reduce((sum, l) => sum + parseFloat(l.loanAmount || "0"), 0);
 
-  const lockedProgress = kpiTarget && progress
-    ? Math.round((progress.lockedLoansThisMonth / kpiTarget.lockedLoansMonthly) * 100)
-    : 0;
+  const pullThroughRate = applicationsCount > 0 ? Math.round((fundedCount / applicationsCount) * 100) : 0;
 
-  const lockPercentage = kpiTarget ? parseFloat(kpiTarget.lockPercentage) : 90;
+  // Monthly activity totals
+  const thisMonth = new Date().getMonth();
+  const thisMonthActivities = dailyActivities.filter((a) => {
+    const activityDate = new Date(a.activityDate);
+    return activityDate.getMonth() === thisMonth;
+  });
 
-  // Determine status based on progress
-  const getStatus = (progress: number): "on-track" | "at-risk" | "behind" => {
-    if (progress >= 80) return "on-track";
-    if (progress >= 60) return "at-risk";
-    return "behind";
-  };
-
-  // Generate chart data from actual weekly breakdown
-  const weeklyTarget = kpiTarget ? Math.ceil(kpiTarget.requiredUnitsMonthly / 4) : 6;
-  const weeklyData = progress?.weeklyBreakdown
-    ? progress.weeklyBreakdown.map((week: any) => ({
-        name: `Week ${week.weekNumber}`,
-        value: week.meetings + week.events,
-        target: weeklyTarget,
-      }))
-    : [
-        { name: 'Week 1', value: 0, target: weeklyTarget },
-        { name: 'Week 2', value: 0, target: weeklyTarget },
-        { name: 'Week 3', value: 0, target: weeklyTarget },
-        { name: 'Week 4', value: 0, target: weeklyTarget },
-      ];
-
-  // Weekly activity breakdown data
-  const weeklyActivityData = progress?.weeklyBreakdown
-    ? progress.weeklyBreakdown.map((week: any) => ({
-        name: `Week ${week.weekNumber}`,
-        events: week.events || 0,
-        meetings: week.meetings || 0,
-        videos: week.videos || 0,
-        thankyouCards: week.thankyouCards || 0,
-        hoursProspected: week.hoursProspected || 0,
-        target: weeklyTarget,
-      }))
-    : [
-        { name: 'Week 1', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0, target: weeklyTarget },
-        { name: 'Week 2', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0, target: weeklyTarget },
-        { name: 'Week 3', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0, target: weeklyTarget },
-        { name: 'Week 4', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0, target: weeklyTarget },
-      ];
-
-  // For monthly data, use real aggregated data from all months
-  const monthlyTarget = kpiTarget ? kpiTarget.requiredUnitsMonthly : 24;
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const currentMonthIndex = new Date().getMonth();
-  
-  const monthlyData = progress?.monthlyBreakdown
-    ? monthNames.slice(0, currentMonthIndex + 1).map((name, index) => {
-        const monthData = progress.monthlyBreakdown[index];
-        return {
-          name,
-          value: monthData ? monthData.meetings + monthData.events : 0,
-          target: monthlyTarget,
-        };
-      })
-    : monthNames.slice(0, currentMonthIndex + 1).map((name) => ({
-        name,
-        value: 0,
-        target: monthlyTarget,
-      }));
-
-  // Monthly activity breakdown data
-  const monthlyActivityData = progress?.monthlyBreakdown
-    ? monthNames.slice(0, currentMonthIndex + 1).map((name, index) => {
-        const monthData = progress.monthlyBreakdown[index];
-        return {
-          name,
-          events: monthData?.events || 0,
-          meetings: monthData?.meetings || 0,
-          videos: monthData?.videos || 0,
-          thankyouCards: monthData?.thankyouCards || 0,
-          hoursProspected: monthData?.hoursProspected || 0,
-          target: monthlyTarget,
-        };
-      })
-    : monthNames.slice(0, currentMonthIndex + 1).map((name) => ({
-        name,
-        events: 0,
-        meetings: 0,
-        videos: 0,
-        thankyouCards: 0,
-        hoursProspected: 0,
-        target: monthlyTarget,
-      }));
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const monthlyCallsMade = thisMonthActivities.reduce((sum, a) => sum + (a.callsMade || 0), 0);
+  const monthlyAppointments = thisMonthActivities.reduce((sum, a) => sum + (a.appointmentsCompleted || 0), 0);
+  const monthlyApplications = thisMonthActivities.reduce((sum, a) => sum + (a.applicationsSubmitted || 0), 0);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background">
-        <div className="flex items-center justify-between px-4 sm:px-8 h-16">
-          <h1 className="text-xl sm:text-2xl font-bold">Employee Dashboard</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              {employeeName}
-            </span>
-            <Button variant="outline" onClick={onLogout} data-testid="button-logout">
-              <LogOut className="w-4 h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white" data-testid="text-employee-name">
+              Welcome, {employeeName}
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400">Mortgage Performance Dashboard</p>
           </div>
+          <Button
+            variant="outline"
+            onClick={onLogout}
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         </div>
-      </header>
 
-      <main className="px-4 sm:px-8 py-8 max-w-7xl mx-auto">
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
-            <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Tracker</TabsTrigger>
-            <TabsTrigger value="progress" data-testid="tab-progress">Progress</TabsTrigger>
-            <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Applications YTD</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-applications-count">{applicationsCount}</div>
+              <p className="text-xs text-muted-foreground">
+                {monthlyApplications} this month
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Funded Loans</CardTitle>
+              <Award className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-funded-count">{fundedCount}</div>
+              <p className="text-xs text-muted-foreground">
+                ${(fundedVolume / 1000000).toFixed(2)}M in volume
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pipeline Value</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-pipeline-value">
+                ${(pipelineValue / 1000000).toFixed(2)}M
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {loans.filter((l) => l.status !== "closed").length} active loans
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pull-Through Rate</CardTitle>
+              <Percent className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-pull-through-rate">{pullThroughRate}%</div>
+              <p className="text-xs text-muted-foreground">
+                {fundedCount} of {applicationsCount} closed
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="pipeline" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="pipeline" data-testid="tab-pipeline">Loan Pipeline</TabsTrigger>
+            <TabsTrigger value="daily" data-testid="tab-daily">Daily Activity</TabsTrigger>
+            <TabsTrigger value="realtors" data-testid="tab-realtors">Realtor Partners</TabsTrigger>
+            <TabsTrigger value="coaching" data-testid="tab-coaching">Coaching Notes</TabsTrigger>
+            <TabsTrigger value="activity" data-testid="tab-activity-summary">Activity Summary</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-6">
-            {!kpiTarget ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">
-                  No KPI targets set. Please contact your administrator to set up your goals.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <KPICard
-                    title="Annual Volume Goal"
-                    value={progress ? formatCurrency(progress.volumeCompleted) : "$0"}
-                    target={formatCurrency(parseFloat(kpiTarget.annualVolumeGoal))}
-                    progress={volumeProgress}
-                    icon={DollarSign}
-                    status={getStatus(volumeProgress)}
-                  />
-                  <KPICard
-                    title="Monthly Units"
-                    value={progress ? progress.unitsThisMonth.toString() : "0"}
-                    target={kpiTarget.requiredUnitsMonthly.toString()}
-                    progress={unitsProgress}
-                    icon={Target}
-                    status={getStatus(unitsProgress)}
-                  />
-                  <KPICard
-                    title="Locked Loans"
-                    value={progress ? progress.lockedLoansThisMonth.toString() : "0"}
-                    target={kpiTarget.lockedLoansMonthly.toString()}
-                    progress={lockedProgress}
-                    icon={TrendingUp}
-                    status={getStatus(lockedProgress)}
-                  />
-                  <KPICard
-                    title="Lock to Close %"
-                    value={`${lockPercentage.toFixed(0)}%`}
-                    target={`${lockPercentage.toFixed(0)}%`}
-                    progress={100}
-                    icon={Percent}
-                    status="on-track"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <ProgressChart
-                    title="Weekly Units Closed"
-                    data={weeklyData}
-                    type="area"
-                  />
-                  <ProgressChart
-                    title="Monthly Performance"
-                    data={monthlyData}
-                    type="bar"
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-4">
-                  <ActivityBreakdownChart
-                    title="Weekly Activities Breakdown"
-                    data={weeklyActivityData}
-                    type="stacked"
-                    showTarget={true}
-                  />
-                  <ActivityBreakdownChart
-                    title="Monthly Activities Breakdown"
-                    data={monthlyActivityData}
-                    type="stacked"
-                    showTarget={true}
-                  />
-                </div>
-              </>
-            )}
+          <TabsContent value="pipeline" className="space-y-4">
+            <LoanPipelineBoard />
           </TabsContent>
 
-          <TabsContent value="weekly" className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <h2 className="text-xl font-semibold">Weekly Activities</h2>
-              <DateRangeSelector onRangeChange={handleDateRangeChange} />
-            </div>
-            <WeeklyGoalTracker />
+          <TabsContent value="daily" className="space-y-4">
+            <DailyActivityLog />
           </TabsContent>
 
-          <TabsContent value="progress" className="space-y-6">
-            <h2 className="text-xl font-semibold">Performance Trends</h2>
-            <div className="grid grid-cols-1 gap-4">
-              <ProgressChart
-                title="Year-to-Date Volume Progress"
-                data={monthlyData}
-                type="line"
-                height={300}
-              />
-              <ActivityBreakdownChart
-                title="Year-to-Date Activities by Month"
-                data={monthlyActivityData}
-                type="stacked"
-                showTarget={true}
-                height={400}
-              />
-              <ActivityBreakdownChart
-                title="Weekly Activities Comparison"
-                data={weeklyActivityData}
-                type="grouped"
-                showTarget={true}
-                height={300}
-              />
-            </div>
+          <TabsContent value="realtors" className="space-y-4">
+            <RealtorRelationships />
           </TabsContent>
 
-          <TabsContent value="profile" className="space-y-6">
-            <h2 className="text-xl font-semibold">My Profile</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-1">Name</h3>
-                  <p className="text-base">{employeeName}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-1">Role</h3>
-                  <p className="text-base">Employee</p>
-                </div>
-              </div>
-              {kpiTarget && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{currentYear} KPI Goals</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Annual Volume:</span>
-                        <span className="font-mono">{formatCurrency(parseFloat(kpiTarget.annualVolumeGoal))}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Required Units Monthly:</span>
-                        <span className="font-mono">{kpiTarget.requiredUnitsMonthly}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Lock %:</span>
-                        <span className="font-mono">{parseFloat(kpiTarget.lockPercentage).toFixed(0)}%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Locked Loans Monthly:</span>
-                        <span className="font-mono">{kpiTarget.lockedLoansMonthly}</span>
-                      </div>
-                    </div>
+          <TabsContent value="coaching" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Coaching & Feedback</CardTitle>
+                <CardDescription>Notes and feedback from your manager</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {coachingNotes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No coaching notes yet
                   </div>
-                </div>
-              )}
-              {salesTarget && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{currentYear} Sales Targets</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Events (Yearly):</span>
-                        <span className="font-mono">{salesTarget.eventsTarget}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>1-to-1 Meetings:</span>
-                        <span className="font-mono">{salesTarget.meetingsTarget}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Thank You Cards:</span>
-                        <span className="font-mono">{salesTarget.thankyouTarget}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Prospecting Calls:</span>
-                        <span className="font-mono">{salesTarget.prospectingTarget}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Social Media Videos:</span>
-                        <span className="font-mono">{salesTarget.videosTarget}</span>
-                      </div>
-                    </div>
+                ) : (
+                  <div className="space-y-4">
+                    {coachingNotes.map((note) => (
+                      <Card key={note.id} data-testid={`card-coaching-note-${note.id}`}>
+                        <CardHeader>
+                          <CardTitle className="text-lg">{note.subject}</CardTitle>
+                          <CardDescription>
+                            {new Date(note.createdAt).toLocaleDateString()} - {note.noteType}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <p className="text-sm">{note.content}</p>
+                          {note.actionItems && (
+                            <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md">
+                              <p className="text-sm font-semibold mb-1">Action Items:</p>
+                              <p className="text-sm">{note.actionItems}</p>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
-                </div>
-              )}
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Calls This Month
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold" data-testid="text-monthly-calls">{monthlyCallsMade}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5" />
+                    Appointments
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold" data-testid="text-monthly-appointments">{monthlyAppointments}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Applications
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold" data-testid="text-monthly-applications">{monthlyApplications}</div>
+                </CardContent>
+              </Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Daily Activities</CardTitle>
+                <CardDescription>Your activity log for the past 7 days</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dailyActivities.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No activities logged yet. Start tracking your daily activities!
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dailyActivities.slice(0, 7).map((activity) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between p-3 border rounded-md"
+                        data-testid={`activity-${activity.id}`}
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {new Date(activity.activityDate).toLocaleDateString('en-US', { 
+                              weekday: 'short', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </p>
+                          {activity.notes && (
+                            <p className="text-sm text-muted-foreground">{activity.notes}</p>
+                          )}
+                        </div>
+                        <div className="text-right text-sm text-muted-foreground">
+                          {activity.callsMade} calls, {activity.appointmentsCompleted} appts, {activity.applicationsSubmitted} apps
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
-      </main>
+      </div>
     </div>
   );
 }

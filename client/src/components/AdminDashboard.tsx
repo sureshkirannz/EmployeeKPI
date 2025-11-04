@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, BarChart3, Settings, LogOut, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -12,6 +12,7 @@ import DeleteConfirmDialog from "./DeleteConfirmDialog";
 import KPITargetDialog from "./KPITargetDialog";
 import ProgressChart from "./ProgressChart";
 import AdminReports from "./AdminReports";
+import CoachingFeedback from "./CoachingFeedback";
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -25,7 +26,7 @@ interface Employee {
 }
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState("employees");
   const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
@@ -151,6 +152,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const menuItems = [
     { title: "Dashboard", icon: LayoutDashboard, view: "dashboard" },
     { title: "Employees", icon: Users, view: "employees" },
+    { title: "Coaching", icon: MessageSquare, view: "coaching" },
     { title: "Reports", icon: BarChart3, view: "reports" },
     { title: "Settings", icon: Settings, view: "settings" },
   ];
@@ -302,6 +304,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   />
                 )}
               </div>
+            )}
+
+            {activeView === "coaching" && (
+              <CoachingFeedback />
             )}
 
             {activeView === "reports" && (

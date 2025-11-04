@@ -13,6 +13,12 @@ import {
   type InsertTopRealtor,
   type Loan,
   type InsertLoan,
+  type DailyActivity,
+  type InsertDailyActivity,
+  type CoachingNote,
+  type InsertCoachingNote,
+  type RealtorPartner,
+  type InsertRealtorPartner,
   users,
   employeeKpiTargets,
   employeeSalesTargets,
@@ -20,6 +26,9 @@ import {
   pastClients,
   topRealtors,
   loans,
+  dailyActivities,
+  coachingNotes,
+  realtorPartners,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
@@ -66,6 +75,26 @@ export interface IStorage {
   // Loans
   getLoansForEmployee(employeeId: string, year?: number): Promise<Loan[]>;
   createLoan(loan: InsertLoan): Promise<Loan>;
+  updateLoan(id: string, loan: Partial<InsertLoan>): Promise<Loan | undefined>;
+  deleteLoan(id: string): Promise<boolean>;
+
+  // Daily Activities
+  getDailyActivity(employeeId: string, activityDate: string): Promise<DailyActivity | undefined>;
+  getDailyActivitiesForEmployee(employeeId: string, startDate?: string, endDate?: string): Promise<DailyActivity[]>;
+  createDailyActivity(activity: InsertDailyActivity): Promise<DailyActivity>;
+  updateDailyActivity(id: string, activity: Partial<InsertDailyActivity>): Promise<DailyActivity | undefined>;
+  deleteDailyActivity(id: string): Promise<boolean>;
+
+  // Coaching Notes
+  getCoachingNotesForEmployee(employeeId: string): Promise<CoachingNote[]>;
+  createCoachingNote(note: InsertCoachingNote): Promise<CoachingNote>;
+  deleteCoachingNote(id: string): Promise<boolean>;
+
+  // Realtor Partners
+  getRealtorPartnersForEmployee(employeeId: string): Promise<RealtorPartner[]>;
+  createRealtorPartner(partner: InsertRealtorPartner): Promise<RealtorPartner>;
+  updateRealtorPartner(id: string, partner: Partial<InsertRealtorPartner>): Promise<RealtorPartner | undefined>;
+  deleteRealtorPartner(id: string): Promise<boolean>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -258,6 +287,111 @@ export class PostgresStorage implements IStorage {
   async createLoan(loan: InsertLoan): Promise<Loan> {
     const result = await db.insert(loans).values(loan).returning();
     return result[0];
+  }
+
+  async updateLoan(id: string, loan: Partial<InsertLoan>): Promise<Loan | undefined> {
+    const result = await db
+      .update(loans)
+      .set({ ...loan, updatedAt: new Date() })
+      .where(eq(loans.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteLoan(id: string): Promise<boolean> {
+    const result = await db.delete(loans).where(eq(loans.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Daily Activities
+  async getDailyActivity(employeeId: string, activityDate: string): Promise<DailyActivity | undefined> {
+    const result = await db
+      .select()
+      .from(dailyActivities)
+      .where(and(eq(dailyActivities.employeeId, employeeId), eq(dailyActivities.activityDate, activityDate)))
+      .limit(1);
+    return result[0];
+  }
+
+  async getDailyActivitiesForEmployee(employeeId: string, startDate?: string, endDate?: string): Promise<DailyActivity[]> {
+    const conditions = [eq(dailyActivities.employeeId, employeeId)];
+
+    if (startDate && endDate) {
+      conditions.push(gte(dailyActivities.activityDate, startDate));
+      conditions.push(lte(dailyActivities.activityDate, endDate));
+    }
+
+    return await db
+      .select()
+      .from(dailyActivities)
+      .where(and(...conditions))
+      .orderBy(desc(dailyActivities.activityDate));
+  }
+
+  async createDailyActivity(activity: InsertDailyActivity): Promise<DailyActivity> {
+    const result = await db.insert(dailyActivities).values(activity).returning();
+    return result[0];
+  }
+
+  async updateDailyActivity(id: string, activity: Partial<InsertDailyActivity>): Promise<DailyActivity | undefined> {
+    const result = await db
+      .update(dailyActivities)
+      .set({ ...activity, updatedAt: new Date() })
+      .where(eq(dailyActivities.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteDailyActivity(id: string): Promise<boolean> {
+    const result = await db.delete(dailyActivities).where(eq(dailyActivities.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Coaching Notes
+  async getCoachingNotesForEmployee(employeeId: string): Promise<CoachingNote[]> {
+    return await db
+      .select()
+      .from(coachingNotes)
+      .where(eq(coachingNotes.employeeId, employeeId))
+      .orderBy(desc(coachingNotes.createdAt));
+  }
+
+  async createCoachingNote(note: InsertCoachingNote): Promise<CoachingNote> {
+    const result = await db.insert(coachingNotes).values(note).returning();
+    return result[0];
+  }
+
+  async deleteCoachingNote(id: string): Promise<boolean> {
+    const result = await db.delete(coachingNotes).where(eq(coachingNotes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Realtor Partners
+  async getRealtorPartnersForEmployee(employeeId: string): Promise<RealtorPartner[]> {
+    return await db
+      .select()
+      .from(realtorPartners)
+      .where(eq(realtorPartners.employeeId, employeeId))
+      .orderBy(desc(realtorPartners.lastContactDate));
+  }
+
+  async createRealtorPartner(partner: InsertRealtorPartner): Promise<RealtorPartner> {
+    const result = await db.insert(realtorPartners).values(partner).returning();
+    return result[0];
+  }
+
+  async updateRealtorPartner(id: string, partner: Partial<InsertRealtorPartner>): Promise<RealtorPartner | undefined> {
+    const result = await db
+      .update(realtorPartners)
+      .set({ ...partner, updatedAt: new Date() })
+      .where(eq(realtorPartners.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteRealtorPartner(id: string): Promise<boolean> {
+    const result = await db.delete(realtorPartners).where(eq(realtorPartners.id, id)).returning();
+    return result.length > 0;
   }
 }
 

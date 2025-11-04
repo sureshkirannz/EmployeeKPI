@@ -579,6 +579,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Daily Activities Routes
+  app.get("/api/employee/daily-activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const activities = await storage.getDailyActivitiesForEmployee(
+        req.userId!,
+        startDate as string,
+        endDate as string
+      );
+      return res.json({ activities });
+    } catch (error) {
+      console.error("Get daily activities error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employee/daily-activities/:date", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { date } = req.params;
+      const activity = await storage.getDailyActivity(req.userId!, date);
+      return res.json({ activity });
+    } catch (error) {
+      console.error("Get daily activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/employee/daily-activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const activity = await storage.createDailyActivity({
+        ...req.body,
+        employeeId: req.userId!,
+      });
+      return res.status(201).json({ activity });
+    } catch (error) {
+      console.error("Create daily activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/employee/daily-activities/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const activity = await storage.updateDailyActivity(id, req.body);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      return res.json({ activity });
+    } catch (error) {
+      console.error("Update daily activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Enhanced Loan Routes
+  app.put("/api/employee/loans/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const loan = await storage.updateLoan(id, req.body);
+      if (!loan) {
+        return res.status(404).json({ error: "Loan not found" });
+      }
+      return res.json({ loan });
+    } catch (error) {
+      console.error("Update loan error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/employee/loans/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteLoan(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Loan not found" });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Delete loan error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Coaching Notes Routes
+  app.get("/api/employee/coaching-notes", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const notes = await storage.getCoachingNotesForEmployee(req.userId!);
+      return res.json({ notes });
+    } catch (error) {
+      console.error("Get coaching notes error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/coaching-notes", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const note = await storage.createCoachingNote({
+        ...req.body,
+        managerId: req.userId!,
+      });
+      return res.status(201).json({ note });
+    } catch (error) {
+      console.error("Create coaching note error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/admin/coaching-notes/:id", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteCoachingNote(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Delete coaching note error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Realtor Partners Routes
+  app.get("/api/employee/realtor-partners", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const partners = await storage.getRealtorPartnersForEmployee(req.userId!);
+      return res.json({ partners });
+    } catch (error) {
+      console.error("Get realtor partners error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/employee/realtor-partners", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const partner = await storage.createRealtorPartner({
+        ...req.body,
+        employeeId: req.userId!,
+      });
+      return res.status(201).json({ partner });
+    } catch (error) {
+      console.error("Create realtor partner error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/employee/realtor-partners/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const partner = await storage.updateRealtorPartner(id, req.body);
+      if (!partner) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+      return res.json({ partner });
+    } catch (error) {
+      console.error("Update realtor partner error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/employee/realtor-partners/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteRealtorPartner(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Delete realtor partner error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
