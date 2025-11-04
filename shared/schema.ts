@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -77,6 +77,7 @@ export const weeklyActivities = pgTable("weekly_activities", {
   hoursProspected: decimal("hours_prospected", { precision: 5, scale: 2 }).notNull().default("0"),
   thankYouCards: integer("thank_you_cards").notNull().default(0),
   leadsReceived: integer("leads_received").notNull().default(0),
+  dailyBreakdown: jsonb("daily_breakdown"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

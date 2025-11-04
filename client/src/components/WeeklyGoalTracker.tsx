@@ -22,6 +22,14 @@ interface WeeklyActivity {
   hoursProspected: string;
   thankyouCards: number;
   leadsReceived: number;
+  dailyBreakdown?: {
+    faceToFaceMeetings: number[][];
+    events: number[];
+    videos: number[];
+    hoursProspected: number[];
+    thankyouCards: number[][];
+    leadsReceived: number[];
+  };
 }
 
 export default function WeeklyGoalTracker() {
@@ -120,6 +128,7 @@ export default function WeeklyGoalTracker() {
       hoursProspected: goals.hoursProspected.toString(),
       thankyouCards: goals.thankyouCards,
       leadsReceived: goals.leadsReceived,
+      dailyBreakdown: dailyValues,
     });
   };
 
@@ -172,15 +181,19 @@ export default function WeeklyGoalTracker() {
         thankyouCards: currentActivity.thankyouCards,
         leadsReceived: currentActivity.leadsReceived,
       });
-      // Reset daily values when loading saved activity (we only save totals)
-      setDailyValues({
-        faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
-        events: Array(6).fill(0),
-        videos: Array(6).fill(0),
-        hoursProspected: Array(6).fill(0),
-        thankyouCards: Array(6).fill(0).map(() => Array(2).fill(0)),
-        leadsReceived: Array(6).fill(0),
-      });
+      // Load daily values from saved activity if available
+      if (currentActivity.dailyBreakdown) {
+        setDailyValues(currentActivity.dailyBreakdown);
+      } else {
+        setDailyValues({
+          faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
+          events: Array(6).fill(0),
+          videos: Array(6).fill(0),
+          hoursProspected: Array(6).fill(0),
+          thankyouCards: Array(6).fill(0).map(() => Array(2).fill(0)),
+          leadsReceived: Array(6).fill(0),
+        });
+      }
     } else {
       // Reset to empty state for new week
       setGoals({
