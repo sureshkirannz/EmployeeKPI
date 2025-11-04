@@ -200,7 +200,7 @@ export default function WeeklyGoalTracker() {
         leadsReceived: Array(6).fill(0),
       });
     }
-  }, [activitiesData, weekStart]);
+  }, [activitiesData, selectedWeek]);
 
   return (
     <Card>
