@@ -1,17 +1,135 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { LayoutDashboard, Users, BarChart3, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import KPICard from "./KPICard";
 import EmployeeTable from "./EmployeeTable";
+import EmployeeFormDialog from "./EmployeeFormDialog";
+import DeleteConfirmDialog from "./DeleteConfirmDialog";
 import ProgressChart from "./ProgressChart";
 
 interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+interface Employee {
+  id: string;
+  username: string;
+  employeeName: string;
+  role: string;
+}
+
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [activeView, setActiveView] = useState("dashboard");
+  const [employeeDialogOpen, setEmployeeDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const { data: employeesData, isLoading } = useQuery<{ employees: Employee[] }>({
+    queryKey: ["/api/admin/employees"],
+    enabled: activeView === "employees",
+  });
+
+  const createEmployeeMutation = useMutation({
+    mutationFn: async (employee: any) => {
+      const response = await apiRequest("POST", "/api/admin/employees", employee);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      toast({
+        title: "Success",
+        description: "Employee created successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create employee",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateEmployeeMutation = useMutation({
+    mutationFn: async (employee: any) => {
+      const { id, ...data } = employee;
+      const response = await apiRequest("PUT", `/api/admin/employees/${id}`, data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      toast({
+        title: "Success",
+        description: "Employee updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update employee",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/admin/employees/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/employees"] });
+      toast({
+        title: "Success",
+        description: "Employee deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete employee",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAddEmployee = () => {
+    setSelectedEmployee(null);
+    setEmployeeDialogOpen(true);
+  };
+
+  const handleEditEmployee = (id: string) => {
+    const employee = employeesData?.employees.find((e: Employee) => e.id === id);
+    if (employee) {
+      setSelectedEmployee(employee);
+      setEmployeeDialogOpen(true);
+    }
+  };
+
+  const handleDeleteEmployee = (id: string) => {
+    setEmployeeToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSubmitEmployee = async (employee: any) => {
+    if (employee.id) {
+      await updateEmployeeMutation.mutateAsync(employee);
+    } else {
+      await createEmployeeMutation.mutateAsync(employee);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (employeeToDelete) {
+      await deleteEmployeeMutation.mutateAsync(employeeToDelete);
+      setEmployeeToDelete(null);
+    }
+  };
 
   const menuItems = [
     { title: "Dashboard", icon: LayoutDashboard, view: "dashboard" },
@@ -21,12 +139,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   ];
 
   //todo: remove mock functionality
-  const mockEmployees = [
-    { id: '1', name: 'Sarah Johnson', username: 'sjohnson', role: 'Employee', volumeProgress: 85, unitsProgress: 92, status: 'on-track' as const },
-    { id: '2', name: 'Michael Chen', username: 'mchen', role: 'Employee', volumeProgress: 45, unitsProgress: 58, status: 'at-risk' as const },
-    { id: '3', name: 'Emily Rodriguez', username: 'erodriguez', role: 'Employee', volumeProgress: 110, unitsProgress: 105, status: 'exceeded' as const },
-  ];
-
   const chartData = [
     { name: 'Jan', value: 65, target: 96 },
     { name: 'Feb', value: 72, target: 96 },
@@ -38,6 +150,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
+
+  const employees = employeesData?.employees || [];
+  const tableEmployees = employees.map((e: Employee) => ({
+    ...e,
+    name: e.employeeName,
+    volumeProgress: 85,
+    unitsProgress: 92,
+    status: "on-track" as const,
+  }));
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -104,7 +225,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   />
                   <KPICard
                     title="Total Employees"
-                    value="12"
+                    value={employees.length.toString()}
                     subtitle="Active employees"
                   />
                   <KPICard
@@ -131,12 +252,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             )}
 
             {activeView === "employees" && (
-              <EmployeeTable
-                employees={mockEmployees}
-                onEdit={(id) => console.log('Edit:', id)}
-                onDelete={(id) => console.log('Delete:', id)}
-                onAdd={() => console.log('Add employee')}
-              />
+              <div>
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-muted-foreground">Loading employees...</div>
+                  </div>
+                ) : (
+                  <EmployeeTable
+                    employees={tableEmployees}
+                    onEdit={handleEditEmployee}
+                    onDelete={handleDeleteEmployee}
+                    onAdd={handleAddEmployee}
+                  />
+                )}
+              </div>
             )}
 
             {activeView === "reports" && (
@@ -162,6 +291,22 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           </main>
         </div>
       </div>
+
+      <EmployeeFormDialog
+        open={employeeDialogOpen}
+        onClose={() => setEmployeeDialogOpen(false)}
+        onSubmit={handleSubmitEmployee}
+        employee={selectedEmployee}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Employee"
+        description="Are you sure you want to delete this employee? This action cannot be undone and will remove all associated KPI data."
+        isDeleting={deleteEmployeeMutation.isPending}
+      />
     </SidebarProvider>
   );
 }

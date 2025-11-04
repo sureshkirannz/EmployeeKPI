@@ -160,6 +160,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // KPI Target routes
+  app.get("/api/admin/kpi-targets/:employeeId/:year", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { employeeId, year } = req.params;
+      const target = await storage.getEmployeeKpiTarget(employeeId, parseInt(year));
+      return res.json({ target });
+    } catch (error) {
+      console.error("Get KPI target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/kpi-targets", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const target = await storage.createEmployeeKpiTarget(req.body);
+      return res.status(201).json({ target });
+    } catch (error) {
+      console.error("Create KPI target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/admin/kpi-targets/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const target = await storage.updateEmployeeKpiTarget(id, req.body);
+      if (!target) {
+        return res.status(404).json({ error: "KPI target not found" });
+      }
+      return res.json({ target });
+    } catch (error) {
+      console.error("Update KPI target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Sales Target routes
+  app.get("/api/admin/sales-targets/:employeeId/:year", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { employeeId, year } = req.params;
+      const target = await storage.getEmployeeSalesTarget(employeeId, parseInt(year));
+      return res.json({ target });
+    } catch (error) {
+      console.error("Get sales target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/sales-targets", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const target = await storage.createEmployeeSalesTarget(req.body);
+      return res.status(201).json({ target });
+    } catch (error) {
+      console.error("Create sales target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/admin/sales-targets/:id", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const target = await storage.updateEmployeeSalesTarget(id, req.body);
+      if (!target) {
+        return res.status(404).json({ error: "Sales target not found" });
+      }
+      return res.json({ target });
+    } catch (error) {
+      console.error("Update sales target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Employee routes - Weekly activities
+  app.get("/api/employee/weekly-activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const activities = await storage.getWeeklyActivitiesForEmployee(
+        req.userId!,
+        startDate as string | undefined,
+        endDate as string | undefined
+      );
+      return res.json({ activities });
+    } catch (error) {
+      console.error("Get weekly activities error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/employee/weekly-activities", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const activity = await storage.createWeeklyActivity({
+        ...req.body,
+        employeeId: req.userId!,
+      });
+      return res.status(201).json({ activity });
+    } catch (error) {
+      console.error("Create weekly activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/employee/weekly-activities/:id", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const activity = await storage.updateWeeklyActivity(id, req.body);
+      if (!activity) {
+        return res.status(404).json({ error: "Weekly activity not found" });
+      }
+      return res.json({ activity });
+    } catch (error) {
+      console.error("Update weekly activity error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Employee routes - KPI and Sales targets (read-only)
+  app.get("/api/employee/kpi-targets/:year", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { year } = req.params;
+      const target = await storage.getEmployeeKpiTarget(req.userId!, parseInt(year));
+      return res.json({ target });
+    } catch (error) {
+      console.error("Get employee KPI target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employee/sales-targets/:year", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { year } = req.params;
+      const target = await storage.getEmployeeSalesTarget(req.userId!, parseInt(year));
+      return res.json({ target });
+    } catch (error) {
+      console.error("Get employee sales target error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Past clients and top realtors
+  app.get("/api/employee/past-clients", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const pastClient = await storage.getPastClient(req.userId!);
+      return res.json({ pastClient });
+    } catch (error) {
+      console.error("Get past clients error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employee/top-realtors", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const topRealtor = await storage.getTopRealtor(req.userId!);
+      return res.json({ topRealtor });
+    } catch (error) {
+      console.error("Get top realtors error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
