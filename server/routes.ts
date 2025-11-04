@@ -86,7 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/employees", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const createUserSchema = insertUserSchema.extend({
+      const createUserSchema = insertUserSchema.omit({ passwordHash: true }).extend({
         password: z.string().min(6, "Password must be at least 6 characters"),
       });
 
@@ -94,7 +94,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const passwordHash = await hashPassword(validatedData.password);
 
       const newUser = await storage.createUser({
-        ...validatedData,
+        username: validatedData.username,
+        employeeName: validatedData.employeeName,
+        role: validatedData.role,
         passwordHash,
       });
 
