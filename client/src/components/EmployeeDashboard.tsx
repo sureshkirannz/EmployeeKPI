@@ -7,6 +7,7 @@ import KPICard from "./KPICard";
 import WeeklyGoalTracker from "./WeeklyGoalTracker";
 import DateRangeSelector, { DateRangeType } from "./DateRangeSelector";
 import ProgressChart from "./ProgressChart";
+import ActivityBreakdownChart from "./ActivityBreakdownChart";
 import { DollarSign, Target, TrendingUp, Percent } from "lucide-react";
 
 interface EmployeeDashboardProps {
@@ -89,7 +90,7 @@ export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDa
   const weeklyData = progress?.weeklyBreakdown
     ? progress.weeklyBreakdown.map((week: any) => ({
         name: `Week ${week.weekNumber}`,
-        value: week.meetings + week.events, // Could use any metric here
+        value: week.meetings + week.events,
         target: weeklyTarget,
       }))
     : [
@@ -97,6 +98,23 @@ export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDa
         { name: 'Week 2', value: 0, target: weeklyTarget },
         { name: 'Week 3', value: 0, target: weeklyTarget },
         { name: 'Week 4', value: 0, target: weeklyTarget },
+      ];
+
+  // Weekly activity breakdown data
+  const weeklyActivityData = progress?.weeklyBreakdown
+    ? progress.weeklyBreakdown.map((week: any) => ({
+        name: `Week ${week.weekNumber}`,
+        events: week.events || 0,
+        meetings: week.meetings || 0,
+        videos: week.videos || 0,
+        thankyouCards: week.thankyouCards || 0,
+        hoursProspected: week.hoursProspected || 0,
+      }))
+    : [
+        { name: 'Week 1', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0 },
+        { name: 'Week 2', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0 },
+        { name: 'Week 3', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0 },
+        { name: 'Week 4', events: 0, meetings: 0, videos: 0, thankyouCards: 0, hoursProspected: 0 },
       ];
 
   // For monthly data, use real aggregated data from all months
@@ -117,6 +135,28 @@ export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDa
         name,
         value: 0,
         target: monthlyTarget,
+      }));
+
+  // Monthly activity breakdown data
+  const monthlyActivityData = progress?.monthlyBreakdown
+    ? monthNames.slice(0, currentMonthIndex + 1).map((name, index) => {
+        const monthData = progress.monthlyBreakdown[index];
+        return {
+          name,
+          events: monthData?.events || 0,
+          meetings: monthData?.meetings || 0,
+          videos: monthData?.videos || 0,
+          thankyouCards: monthData?.thankyouCards || 0,
+          hoursProspected: monthData?.hoursProspected || 0,
+        };
+      })
+    : monthNames.slice(0, currentMonthIndex + 1).map((name) => ({
+        name,
+        events: 0,
+        meetings: 0,
+        videos: 0,
+        thankyouCards: 0,
+        hoursProspected: 0,
       }));
 
   const formatCurrency = (value: number) => {
@@ -198,16 +238,16 @@ export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDa
                   />
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <ProgressChart
-                    title="Weekly Units Closed"
-                    data={weeklyData}
-                    type="area"
+                <div className="grid grid-cols-1 gap-4">
+                  <ActivityBreakdownChart
+                    title="Weekly Activities Breakdown"
+                    data={weeklyActivityData}
+                    type="stacked"
                   />
-                  <ProgressChart
-                    title="Monthly Performance"
-                    data={monthlyData}
-                    type="bar"
+                  <ActivityBreakdownChart
+                    title="Monthly Activities Breakdown"
+                    data={monthlyActivityData}
+                    type="stacked"
                   />
                 </div>
               </>
@@ -225,16 +265,16 @@ export default function EmployeeDashboard({ employeeName, onLogout }: EmployeeDa
           <TabsContent value="progress" className="space-y-6">
             <h2 className="text-xl font-semibold">Performance Trends</h2>
             <div className="grid grid-cols-1 gap-4">
-              <ProgressChart
-                title="Year-to-Date Volume Progress"
-                data={monthlyData}
-                type="line"
+              <ActivityBreakdownChart
+                title="Year-to-Date Activities by Month"
+                data={monthlyActivityData}
+                type="stacked"
                 height={400}
               />
-              <ProgressChart
+              <ActivityBreakdownChart
                 title="Weekly Activities Comparison"
-                data={weeklyData}
-                type="bar"
+                data={weeklyActivityData}
+                type="grouped"
                 height={300}
               />
             </div>
