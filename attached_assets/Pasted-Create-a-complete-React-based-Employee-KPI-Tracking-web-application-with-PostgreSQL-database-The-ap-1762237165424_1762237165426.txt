@@ -1,0 +1,103 @@
+Create a complete React-based Employee KPI Tracking web application with PostgreSQL database. The app should have the following features:
+Core Requirements:
+ 
+Authentication System
+Simple login page with username/password
+Two user roles: Admin and Employee
+Session management with JWT tokens
+Secure password hashing
+ 
+Admin Dashboard Features
+Create/edit/delete employee accounts
+Set individual KPI targets for each employee including:
+ 
+Annual Volume Goal
+Average Loan Amount
+Required Units Closed Monthly
+Lock % to closing
+Number of locked loans Monthly
+New File to Locked Loan %
+Number of New files created Monthly
+ 
+Set yearly goals for sales actions:
+ 
+Events Attended (target: 52)
+1-to-1 referral partner meetings (target: 240)
+Thank you cards/gifts (target: 365)
+Prospecting calls (target: 365)
+Social Media Videos (target: 365)
+ 
+View all employees' KPI data and reports
+Dashboard with aggregate reporting and charts
+ 
+Employee Dashboard Features
+Weekly goal tracker with these categories:
+ 
+Face to Face Meetings (track up to 3 per week)
+Events
+Videos
+Hours Prospected
+Thank You Cards/Gifts (track up to 2 per week)
+Leads Received
+Date range filter with these options:
+ 
+Current week (default view)
+Previous week
+Custom date range selector
+Month view
+Year-to-date view
+ 
+Ability to enter data for any past week/date
+View personal KPI progress vs targets
+Charts showing:
+ 
+Weekly progress
+Monthly trends
+Year-to-date performance
+Calculated metrics (new files from actions, conversion rates)
+ 
+Database Schema (PostgreSQL)
+Tables needed:
+users (id, username, password_hash, role, employee_name, created_at)
+employee_kpi_targets (employee_id, annual_volume_goal, avg_loan_amount, required_units_monthly, lock_percentage, locked_loans_monthly, new_file_to_locked_percentage, new_files_monthly, year)
+employee_sales_targets (employee_id, events_target, meetings_target, thankyou_target, prospecting_target, videos_target, year)
+weekly_activities (id, employee_id, week_start_date, week_end_date, face_to_face_meetings, events, videos, hours_prospected, thankyou_cards, leads_received, created_at)
+past_clients (employee_id, total_count)
+top_realtors (employee_id, total_count)
+ 
+Technical Stack
+Frontend: React with React Router
+UI Framework: Material-UI or Tailwind CSS
+State Management: React Context API or Redux
+Backend: Node.js with Express
+Database: PostgreSQL
+Authentication: JWT tokens with bcrypt
+Date handling: date-fns or moment.js
+Charts: Recharts or Chart.js
+ 
+Key Calculations to Implement
+Estimated new files from sales actions (based on conversion rates)
+New files from past clients (1 file per 100 clients monthly)
+New files from top realtors (1 file per realtor monthly)
+Total estimated new files yearly and monthly
+Progress percentages for all KPIs
+Week-over-week and month-over-month comparisons
+ 
+UI/UX Requirements
+Clean, modern interface
+Mobile-responsive design
+Easy-to-read data tables
+Visual progress indicators (progress bars, percentage circles)
+Color-coded status (red for behind, green for on-track, yellow for at-risk)
+Export functionality (CSV/Excel) for reports
+Print-friendly reports
+ 
+Additional Features
+Data validation on all inputs
+Confirmation dialogs for destructive actions
+Loading states and error handling
+Toast notifications for success/error messages
+ 
+attached snip of how its in excel as well
+ 
+make sure design is modern and mobile optimised for all pages and no dummy data, all will be from postgre db
