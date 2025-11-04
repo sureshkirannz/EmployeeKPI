@@ -1,54 +1,86 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/components/LoginPage";
 import AdminDashboard from "@/components/AdminDashboard";
 import EmployeeDashboard from "@/components/EmployeeDashboard";
+import { login, logout, getCurrentUser, type User } from "@/lib/auth";
 
 function Router() {
-  //todo: remove mock functionality - will be replaced with real auth
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState<"admin" | "employee" | null>(null);
-  const [userName, setUserName] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  const handleLogin = (username: string, password: string) => {
-    console.log('Login attempt:', username);
-    
-    // Mock login logic - to be replaced with real authentication
-    if (username === "admin" && password === "admin") {
+  useEffect(() => {
+    // Check if user is already authenticated
+    getCurrentUser()
+      .then((response) => {
+        if (response) {
+          setIsAuthenticated(true);
+          setUser(response.user);
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const handleLogin = async (username: string, password: string) => {
+    try {
+      const response = await login(username, password);
       setIsAuthenticated(true);
-      setUserRole("admin");
-      setUserName("Admin User");
-    } else if (username === "employee" && password === "employee") {
-      setIsAuthenticated(true);
-      setUserRole("employee");
-      setUserName("Sarah Johnson");
-    } else {
-      alert("Invalid credentials. Try admin/admin or employee/employee");
+      setUser(response.user);
+      toast({
+        title: "Welcome back!",
+        description: `Logged in as ${response.user.employeeName}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid credentials",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setUserRole(null);
-    setUserName("");
-    console.log('User logged out');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsAuthenticated(false);
+      setUser(null);
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
   };
 
-  if (!isAuthenticated) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
-  if (userRole === "admin") {
+  if (user.role === "admin") {
     return <AdminDashboard onLogout={handleLogout} />;
   }
 
-  if (userRole === "employee") {
-    return <EmployeeDashboard employeeName={userName} onLogout={handleLogout} />;
+  if (user.role === "employee") {
+    return <EmployeeDashboard employeeName={user.employeeName} onLogout={handleLogout} />;
   }
 
   return (
