@@ -11,12 +11,15 @@ import {
   type InsertPastClient,
   type TopRealtor,
   type InsertTopRealtor,
+  type Loan,
+  type InsertLoan,
   users,
   employeeKpiTargets,
   employeeSalesTargets,
   weeklyActivities,
   pastClients,
   topRealtors,
+  loans,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
@@ -29,6 +32,7 @@ export interface IStorage {
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   getAllEmployees(): Promise<User[]>;
+  getAllUsers(): Promise<User[]>;
 
   // Employee KPI Targets
   getEmployeeKpiTarget(employeeId: string, year: number): Promise<EmployeeKpiTarget | undefined>;
@@ -58,6 +62,10 @@ export interface IStorage {
   getTopRealtor(employeeId: string): Promise<TopRealtor | undefined>;
   createTopRealtor(topRealtor: InsertTopRealtor): Promise<TopRealtor>;
   updateTopRealtor(employeeId: string, totalCount: number): Promise<TopRealtor | undefined>;
+
+  // Loans
+  getLoansForEmployee(employeeId: string, year?: number): Promise<Loan[]>;
+  createLoan(loan: InsertLoan): Promise<Loan>;
 }
 
 export class PostgresStorage implements IStorage {
@@ -89,6 +97,10 @@ export class PostgresStorage implements IStorage {
 
   async getAllEmployees(): Promise<User[]> {
     return await db.select().from(users).where(eq(users.role, "employee"));
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
   }
 
   // Employee KPI Targets
@@ -226,6 +238,25 @@ export class PostgresStorage implements IStorage {
       .set({ totalCount, updatedAt: new Date() })
       .where(eq(topRealtors.employeeId, employeeId))
       .returning();
+    return result[0];
+  }
+
+  // Loans
+  async getLoansForEmployee(employeeId: string, year?: number): Promise<Loan[]> {
+    const conditions = [eq(loans.employeeId, employeeId)];
+    
+    if (year) {
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      conditions.push(gte(loans.createdAt, new Date(yearStart)));
+      conditions.push(lte(loans.createdAt, new Date(yearEnd)));
+    }
+
+    return await db.select().from(loans).where(and(...conditions)).orderBy(desc(loans.createdAt));
+  }
+
+  async createLoan(loan: InsertLoan): Promise<Loan> {
+    const result = await db.insert(loans).values(loan).returning();
     return result[0];
   }
 }

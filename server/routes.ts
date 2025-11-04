@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { hashPassword, comparePassword, generateToken, requireAuth, requireAdmin, type AuthRequest } from "./auth";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema, type User } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -232,6 +232,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin routes - Dashboard stats
+  app.get("/api/admin/stats", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const employees = await storage.getAllEmployees();
+
+      let totalVolumeGoal = 0;
+      let totalVolumeCompleted = 0;
+      let totalUnitsTarget = 0;
+      let totalUnitsCompleted = 0;
+
+      for (const employee of employees) {
+        const kpiTarget = await storage.getEmployeeKpiTarget(employee.id, currentYear);
+        if (kpiTarget) {
+          totalVolumeGoal += parseFloat(kpiTarget.annualVolumeGoal);
+          totalUnitsTarget += kpiTarget.requiredUnitsMonthly * 12;
+        }
+
+        const loans = await storage.getLoansForEmployee(employee.id, currentYear);
+        const volume = loans
+          .filter(loan => loan.closedDate)
+          .reduce((sum, loan) => sum + parseFloat(loan.loanAmount), 0);
+        const units = loans.filter(loan => loan.closedDate).length;
+        
+        totalVolumeCompleted += volume;
+        totalUnitsCompleted += units;
+      }
+
+      const volumeProgress = totalVolumeGoal > 0 ? Math.round((totalVolumeCompleted / totalVolumeGoal) * 100) : 0;
+      const unitsProgress = totalUnitsTarget > 0 ? Math.round((totalUnitsCompleted / totalUnitsTarget) * 100) : 0;
+
+      // Get monthly data for charts
+      const monthlyData = [];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const currentMonthIndex = new Date().getMonth();
+      const monthlyTarget = Math.ceil(totalUnitsTarget / 12);
+
+      for (let monthIndex = 0; monthIndex <= currentMonthIndex; monthIndex++) {
+        let monthUnits = 0;
+        
+        for (const employee of employees) {
+          const loans = await storage.getLoansForEmployee(employee.id, currentYear);
+          const monthLoans = loans.filter(loan => {
+            if (!loan.closedDate) return false;
+            return new Date(loan.closedDate).getMonth() === monthIndex;
+          });
+          monthUnits += monthLoans.length;
+        }
+
+        monthlyData.push({
+          name: monthNames[monthIndex],
+          value: monthUnits,
+          target: monthlyTarget,
+        });
+      }
+
+      return res.json({
+        stats: {
+          totalVolumeGoal,
+          totalVolumeCompleted,
+          volumeProgress,
+          totalUnitsTarget: monthlyTarget,
+          totalUnitsCompleted: Math.round(totalUnitsCompleted / (currentMonthIndex + 1)),
+          unitsProgress,
+          employeeCount: employees.length,
+          monthlyData,
+        },
+      });
+    } catch (error) {
+      console.error("Get admin stats error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Admin routes - Reports and analytics
   app.get("/api/admin/reports/overview", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -240,8 +314,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const employeeData = await Promise.all(
         employees
-          .filter((e) => e.role === "employee")
-          .map(async (employee) => {
+          .filter((e: User) => e.role === "employee")
+          .map(async (employee: User) => {
             const kpiTarget = await storage.getEmployeeKpiTarget(employee.id, currentYear);
             const salesTarget = await storage.getEmployeeSalesTarget(employee.id, currentYear);
             const activities = await storage.getWeeklyActivitiesForEmployee(employee.id);
@@ -335,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           events: acc.events + activity.events,
           meetings: acc.meetings + activity.faceToFaceMeetings,
           videos: acc.videos + activity.videos,
-          thankyouCards: acc.thankyouCards + activity.thankyouCards,
+          thankyouCards: acc.thankyouCards + activity.thankYouCards,
           leadsReceived: acc.leadsReceived + activity.leadsReceived,
           hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
         }),
@@ -347,17 +421,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           events: acc.events + activity.events,
           meetings: acc.meetings + activity.faceToFaceMeetings,
           videos: acc.videos + activity.videos,
-          thankyouCards: acc.thankyouCards + activity.thankyouCards,
+          thankyouCards: acc.thankyouCards + activity.thankYouCards,
           leadsReceived: acc.leadsReceived + activity.leadsReceived,
           hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
         }),
         { events: 0, meetings: 0, videos: 0, thankyouCards: 0, leadsReceived: 0, hoursProspected: 0 }
       );
 
-      // Mock actual loan data (in real app, this would come from loan tracking system)
-      const mockCurrentVolume = parseFloat(kpiTarget.annualVolumeGoal) * 0.45; // 45% progress
-      const mockUnitsThisMonth = Math.floor(kpiTarget.requiredUnitsMonthly * 0.75); // 75% progress
-      const mockLockedLoansThisMonth = Math.floor(kpiTarget.lockedLoansMonthly * 0.85); // 85% progress
+      // Get actual loan data from the database
+      const loansThisYear = await storage.getLoansForEmployee(req.userId!, currentYear);
+      
+      const totalVolume = loansThisYear
+        .filter(loan => loan.closedDate)
+        .reduce((sum, loan) => sum + parseFloat(loan.loanAmount), 0);
+      
+      const closedLoansThisMonth = loansThisYear.filter(loan => {
+        if (!loan.closedDate) return false;
+        const closedMonth = new Date(loan.closedDate).getMonth() + 1;
+        return closedMonth === currentMonth;
+      }).length;
+      
+      const lockedLoansThisMonth = loansThisYear.filter(loan => {
+        if (!loan.lockedDate) return false;
+        const lockedMonth = new Date(loan.lockedDate).getMonth() + 1;
+        return lockedMonth === currentMonth;
+      }).length;
 
       // Generate weekly breakdown from current month activities
       const weeklyBreakdown = [];
@@ -380,7 +468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         week.events += activity.events;
         week.meetings += activity.faceToFaceMeetings;
         week.videos += activity.videos;
-        week.thankyouCards += activity.thankyouCards;
+        week.thankyouCards += activity.thankYouCards;
         week.leadsReceived += activity.leadsReceived;
         week.hoursProspected += parseFloat(activity.hoursProspected);
       });
@@ -410,7 +498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             events: acc.events + activity.events,
             meetings: acc.meetings + activity.faceToFaceMeetings,
             videos: acc.videos + activity.videos,
-            thankyouCards: acc.thankyouCards + activity.thankyouCards,
+            thankyouCards: acc.thankyouCards + activity.thankYouCards,
             leadsReceived: acc.leadsReceived + activity.leadsReceived,
             hoursProspected: acc.hoursProspected + parseFloat(activity.hoursProspected),
           }),
@@ -426,10 +514,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({
         progress: {
-          // Actual loan metrics (mocked for now - would come from loan system)
-          volumeCompleted: mockCurrentVolume,
-          unitsThisMonth: mockUnitsThisMonth,
-          lockedLoansThisMonth: mockLockedLoansThisMonth,
+          // Actual loan metrics from database
+          volumeCompleted: totalVolume,
+          unitsThisMonth: closedLoansThisMonth,
+          lockedLoansThisMonth: lockedLoansThisMonth,
           // Activity metrics from weekly tracking
           yearTotals,
           monthTotals,

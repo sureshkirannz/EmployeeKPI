@@ -117,3 +117,21 @@ export const insertTopRealtorSchema = createInsertSchema(topRealtors).omit({
 
 export type InsertTopRealtor = z.infer<typeof insertTopRealtorSchema>;
 export type TopRealtor = typeof topRealtors.$inferSelect;
+
+export const loans = pgTable("loans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  loanAmount: decimal("loan_amount", { precision: 12, scale: 2 }).notNull(),
+  status: text("status").notNull().default("new"),
+  lockedDate: date("locked_date"),
+  closedDate: date("closed_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertLoanSchema = createInsertSchema(loans).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertLoan = z.infer<typeof insertLoanSchema>;
+export type Loan = typeof loans.$inferSelect;

@@ -69,6 +69,28 @@ async function seed() {
         totalCount: 10,
       });
       console.log("✓ Past clients and top realtors created");
+
+      // Create sample loan data for progress tracking
+      const currentMonth = new Date().getMonth();
+      for (let month = 0; month <= currentMonth; month++) {
+        const loansInMonth = Math.floor(Math.random() * 3) + 2; // 2-4 loans per month
+        for (let i = 0; i < loansInMonth; i++) {
+          const createdDate = new Date(currentYear, month, Math.floor(Math.random() * 28) + 1);
+          const lockedDate = new Date(createdDate);
+          lockedDate.setDate(lockedDate.getDate() + Math.floor(Math.random() * 7) + 1);
+          const closedDate = new Date(lockedDate);
+          closedDate.setDate(closedDate.getDate() + Math.floor(Math.random() * 14) + 7);
+
+          await storage.createLoan({
+            employeeId: employee.id,
+            loanAmount: (Math.random() * 200000 + 250000).toFixed(2),
+            status: "closed",
+            lockedDate: lockedDate.toISOString().split('T')[0],
+            closedDate: closedDate.toISOString().split('T')[0],
+          });
+        }
+      }
+      console.log("✓ Sample loan data created");
     } else {
       console.log("✓ Sample employee already exists");
     }

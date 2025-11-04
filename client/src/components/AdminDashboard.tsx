@@ -39,6 +39,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     enabled: activeView === "employees",
   });
 
+  const { data: statsData } = useQuery<{ stats: any }>({
+    queryKey: ["/api/admin/stats"],
+    enabled: activeView === "dashboard",
+  });
+
   const createEmployeeMutation = useMutation({
     mutationFn: async (employee: any) => {
       const response = await apiRequest("POST", "/api/admin/employees", employee);
@@ -150,27 +155,37 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     { title: "Settings", icon: Settings, view: "settings" },
   ];
 
-  //todo: remove mock functionality
-  const chartData = [
-    { name: 'Jan', value: 65, target: 96 },
-    { name: 'Feb', value: 72, target: 96 },
-    { name: 'Mar', value: 88, target: 96 },
-    { name: 'Apr', value: 91, target: 96 },
-  ];
-
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
   const employees = employeesData?.employees || [];
+  const stats = statsData?.stats;
+  const chartData = stats?.monthlyData || [];
+  
   const tableEmployees = employees.map((e: Employee) => ({
     ...e,
     name: e.employeeName,
-    volumeProgress: 85,
-    unitsProgress: 92,
+    volumeProgress: 0,
+    unitsProgress: 0,
     status: "on-track" as const,
   }));
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const getStatus = (progress: number): "on-track" | "at-risk" | "behind" => {
+    if (progress >= 80) return "on-track";
+    if (progress >= 60) return "at-risk";
+    return "behind";
+  };
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -220,46 +235,54 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <main className="flex-1 overflow-auto p-8">
             {activeView === "dashboard" && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <KPICard
-                    title="Total Volume (All Employees)"
-                    value="$245M"
-                    target="$300M"
-                    progress={82}
-                    status="on-track"
-                  />
-                  <KPICard
-                    title="Avg. Units Closed"
-                    value="19.5"
-                    target="24"
-                    progress={81}
-                    status="on-track"
-                  />
-                  <KPICard
-                    title="Total Employees"
-                    value={employees.length.toString()}
-                    subtitle="Active employees"
-                  />
-                  <KPICard
-                    title="Team Performance"
-                    value="87%"
-                    subtitle="Overall target achievement"
-                    status="on-track"
-                  />
-                </div>
+                {!stats ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-muted-foreground">Loading dashboard...</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <KPICard
+                        title="Total Volume (All Employees)"
+                        value={formatCurrency(stats.totalVolumeCompleted)}
+                        target={formatCurrency(stats.totalVolumeGoal)}
+                        progress={stats.volumeProgress}
+                        status={getStatus(stats.volumeProgress)}
+                      />
+                      <KPICard
+                        title="Avg. Units Closed (Monthly)"
+                        value={stats.totalUnitsCompleted.toString()}
+                        target={stats.totalUnitsTarget.toString()}
+                        progress={stats.unitsProgress}
+                        status={getStatus(stats.unitsProgress)}
+                      />
+                      <KPICard
+                        title="Total Employees"
+                        value={stats.employeeCount.toString()}
+                        subtitle="Active employees"
+                      />
+                      <KPICard
+                        title="Team Performance"
+                        value={`${Math.round((stats.volumeProgress + stats.unitsProgress) / 2)}%`}
+                        subtitle="Overall target achievement"
+                        status={getStatus(Math.round((stats.volumeProgress + stats.unitsProgress) / 2))}
+                      />
+                    </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <ProgressChart
-                    title="Monthly Team Performance"
-                    data={chartData}
-                    type="bar"
-                  />
-                  <ProgressChart
-                    title="Volume Trend"
-                    data={chartData}
-                    type="area"
-                  />
-                </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <ProgressChart
+                        title="Monthly Team Performance"
+                        data={chartData}
+                        type="bar"
+                      />
+                      <ProgressChart
+                        title="Volume Trend"
+                        data={chartData}
+                        type="area"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

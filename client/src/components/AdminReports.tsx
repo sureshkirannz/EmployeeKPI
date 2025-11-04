@@ -80,15 +80,12 @@ export default function AdminReports() {
       )
     : 0;
 
-  // Mock chart data
-  const volumeByEmployee = employees
-    .filter((e) => e.kpiTarget)
-    .slice(0, 5)
-    .map((emp) => ({
-      name: emp.name.split(" ")[0],
-      value: Math.random() * 100,
-      target: 100,
-    }));
+  // Employee-based chart data from actual targets
+  const volumeByEmployee = employeesWithTargets.slice(0, 5).map((emp) => ({
+    name: emp.name.split(" ")[0],
+    value: parseFloat(emp.kpiTarget?.annualVolumeGoal || "0") / 1000000,
+    target: parseFloat(emp.kpiTarget?.annualVolumeGoal || "0") / 1000000,
+  }));
 
   return (
     <div className="space-y-6">
@@ -130,14 +127,18 @@ export default function AdminReports() {
       {volumeByEmployee.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ProgressChart
-            title="Employee Progress (Mock Data)"
+            title="Employee Volume Goals ($M)"
             data={volumeByEmployee}
             type="bar"
             height={300}
           />
           <ProgressChart
-            title="Volume Trends (Mock Data)"
-            data={volumeByEmployee}
+            title="Activity Tracking Overview"
+            data={employees.slice(0, 5).map((emp) => ({
+              name: emp.name.split(" ")[0],
+              value: emp.weeklyActivityCount,
+              target: 52,
+            }))}
             type="area"
             height={300}
           />
