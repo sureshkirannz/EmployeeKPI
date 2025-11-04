@@ -34,6 +34,17 @@ export default function WeeklyGoalTracker() {
     thankyouCards: 0,
     leadsReceived: 0,
   });
+  
+  // Track daily values for breakdown
+  const [dailyValues, setDailyValues] = useState({
+    faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
+    events: Array(6).fill(0),
+    videos: Array(6).fill(0),
+    hoursProspected: Array(6).fill(0),
+    thankyouCards: Array(6).fill(0).map(() => Array(2).fill(0)),
+    leadsReceived: Array(6).fill(0),
+  });
+  
   const { toast } = useToast();
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
@@ -115,6 +126,33 @@ export default function WeeklyGoalTracker() {
   const updateGoal = (field: keyof typeof goals, value: string) => {
     setGoals({ ...goals, [field]: parseFloat(value) || 0 });
   };
+  
+  // Update daily value and recalculate total
+  const updateDailyValue = (field: string, dayIndex: number, value: string, rowIndex?: number) => {
+    const numValue = parseFloat(value) || 0;
+    
+    if (field === 'faceToFaceMeetings' && rowIndex !== undefined) {
+      const newValues = dailyValues.faceToFaceMeetings.map((day, dIdx) => 
+        dIdx === dayIndex ? day.map((v, rIdx) => rIdx === rowIndex ? numValue : v) : day
+      );
+      setDailyValues({ ...dailyValues, faceToFaceMeetings: newValues });
+      const total = newValues.flat().reduce((sum, v) => sum + v, 0);
+      setGoals({ ...goals, faceToFaceMeetings: total });
+    } else if (field === 'thankyouCards' && rowIndex !== undefined) {
+      const newValues = dailyValues.thankyouCards.map((day, dIdx) =>
+        dIdx === dayIndex ? day.map((v, rIdx) => rIdx === rowIndex ? numValue : v) : day
+      );
+      setDailyValues({ ...dailyValues, thankyouCards: newValues });
+      const total = newValues.flat().reduce((sum, v) => sum + v, 0);
+      setGoals({ ...goals, thankyouCards: total });
+    } else {
+      const newValues = [...(dailyValues[field as keyof typeof dailyValues] as number[])];
+      newValues[dayIndex] = numValue;
+      setDailyValues({ ...dailyValues, [field]: newValues });
+      const total = newValues.reduce((sum, v) => sum + v, 0);
+      setGoals({ ...goals, [field]: total });
+    }
+  };
 
   const days = ["Mon", "Tues", "Wed", "Thurs", "Fri", "Weekend"];
 
@@ -134,6 +172,15 @@ export default function WeeklyGoalTracker() {
         thankyouCards: currentActivity.thankyouCards,
         leadsReceived: currentActivity.leadsReceived,
       });
+      // Reset daily values when loading saved activity (we only save totals)
+      setDailyValues({
+        faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
+        events: Array(6).fill(0),
+        videos: Array(6).fill(0),
+        hoursProspected: Array(6).fill(0),
+        thankyouCards: Array(6).fill(0).map(() => Array(2).fill(0)),
+        leadsReceived: Array(6).fill(0),
+      });
     } else {
       // Reset to empty state for new week
       setGoals({
@@ -143,6 +190,14 @@ export default function WeeklyGoalTracker() {
         hoursProspected: 0,
         thankyouCards: 0,
         leadsReceived: 0,
+      });
+      setDailyValues({
+        faceToFaceMeetings: Array(6).fill(0).map(() => Array(3).fill(0)),
+        events: Array(6).fill(0),
+        videos: Array(6).fill(0),
+        hoursProspected: Array(6).fill(0),
+        thankyouCards: Array(6).fill(0).map(() => Array(2).fill(0)),
+        leadsReceived: Array(6).fill(0),
       });
     }
   }, [activitiesData, weekStart]);
@@ -166,14 +221,6 @@ export default function WeeklyGoalTracker() {
                 onSelect={(date) => {
                   if (date) {
                     setSelectedWeek(date);
-                    setGoals({
-                      faceToFaceMeetings: 0,
-                      events: 0,
-                      videos: 0,
-                      hoursProspected: 0,
-                      thankyouCards: 0,
-                      leadsReceived: 0,
-                    });
                   }
                 }}
                 initialFocus
@@ -200,27 +247,29 @@ export default function WeeklyGoalTracker() {
               {/* Face to Face Meetings */}
               <div className="space-y-2 mb-4">
                 <Label className="text-sm font-semibold">Face To Face Meetings</Label>
-                {[1, 2, 3].map((num) => (
-                  <div key={num} className="grid grid-cols-8 gap-2 items-center">
-                    <div className="text-sm text-muted-foreground">{num}</div>
-                    {days.map((day, idx) => (
+                {[0, 1, 2].map((rowIndex) => (
+                  <div key={rowIndex} className="grid grid-cols-8 gap-2 items-center">
+                    <div className="text-sm text-muted-foreground">{rowIndex + 1}</div>
+                    {days.map((day, dayIndex) => (
                       <Input
-                        key={`ftf-${num}-${day}`}
+                        key={`ftf-${rowIndex}-${day}`}
                         type="number"
                         min="0"
                         step="0.1"
+                        value={dailyValues.faceToFaceMeetings[dayIndex][rowIndex] || ''}
+                        onChange={(e) => updateDailyValue('faceToFaceMeetings', dayIndex, e.target.value, rowIndex)}
                         className="h-9 text-center"
                         placeholder="0"
-                        disabled
-                        data-testid={`input-ftf-${num}-${idx}`}
+                        data-testid={`input-ftf-${rowIndex + 1}-${dayIndex}`}
                       />
                     ))}
                     <Input
                       type="number"
                       className="h-9 text-center font-mono font-semibold bg-muted"
+                      value={dailyValues.faceToFaceMeetings.reduce((sum, day) => sum + day[rowIndex], 0) || ''}
                       placeholder="0"
                       disabled
-                      data-testid={`input-ftf-total-${num}`}
+                      data-testid={`input-ftf-total-${rowIndex + 1}`}
                     />
                   </div>
                 ))}
@@ -244,24 +293,25 @@ export default function WeeklyGoalTracker() {
               {/* Events */}
               <div className="grid grid-cols-8 gap-2 items-center mb-4">
                 <Label className="text-sm font-semibold">Events</Label>
-                {days.map((day, idx) => (
+                {days.map((day, dayIndex) => (
                   <Input
                     key={`event-${day}`}
                     type="number"
                     min="0"
                     step="0.1"
+                    value={dailyValues.events[dayIndex] || ''}
+                    onChange={(e) => updateDailyValue('events', dayIndex, e.target.value)}
                     className="h-9 text-center"
                     placeholder="0"
-                    disabled
-                    data-testid={`input-events-${idx}`}
+                    data-testid={`input-events-${dayIndex}`}
                   />
                 ))}
                 <Input
                   type="number"
-                  value={goals.events}
-                  onChange={(e) => updateGoal("events", e.target.value)}
-                  className="h-9 text-center font-mono font-semibold"
+                  value={goals.events || ''}
+                  className="h-9 text-center font-mono font-semibold bg-muted"
                   placeholder="0"
+                  disabled
                   data-testid="input-events-total"
                 />
               </div>
@@ -269,24 +319,25 @@ export default function WeeklyGoalTracker() {
               {/* Videos */}
               <div className="grid grid-cols-8 gap-2 items-center mb-4">
                 <Label className="text-sm font-semibold">Videos</Label>
-                {days.map((day, idx) => (
+                {days.map((day, dayIndex) => (
                   <Input
                     key={`video-${day}`}
                     type="number"
                     min="0"
                     step="0.1"
+                    value={dailyValues.videos[dayIndex] || ''}
+                    onChange={(e) => updateDailyValue('videos', dayIndex, e.target.value)}
                     className="h-9 text-center"
                     placeholder="0"
-                    disabled
-                    data-testid={`input-videos-${idx}`}
+                    data-testid={`input-videos-${dayIndex}`}
                   />
                 ))}
                 <Input
                   type="number"
-                  value={goals.videos}
-                  onChange={(e) => updateGoal("videos", e.target.value)}
-                  className="h-9 text-center font-mono font-semibold"
+                  value={goals.videos || ''}
+                  className="h-9 text-center font-mono font-semibold bg-muted"
                   placeholder="0"
+                  disabled
                   data-testid="input-videos-total"
                 />
               </div>
@@ -294,25 +345,26 @@ export default function WeeklyGoalTracker() {
               {/* Hours Prospected */}
               <div className="grid grid-cols-8 gap-2 items-center mb-4">
                 <Label className="text-sm font-semibold">Hours Prospected</Label>
-                {days.map((day, idx) => (
+                {days.map((day, dayIndex) => (
                   <Input
                     key={`hours-${day}`}
                     type="number"
                     min="0"
                     step="0.5"
+                    value={dailyValues.hoursProspected[dayIndex] || ''}
+                    onChange={(e) => updateDailyValue('hoursProspected', dayIndex, e.target.value)}
                     className="h-9 text-center"
                     placeholder="0"
-                    disabled
-                    data-testid={`input-hours-${idx}`}
+                    data-testid={`input-hours-${dayIndex}`}
                   />
                 ))}
                 <Input
                   type="number"
-                  value={goals.hoursProspected}
-                  onChange={(e) => updateGoal("hoursProspected", e.target.value)}
+                  value={goals.hoursProspected || ''}
                   step="0.5"
-                  className="h-9 text-center font-mono font-semibold"
+                  className="h-9 text-center font-mono font-semibold bg-muted"
                   placeholder="0"
+                  disabled
                   data-testid="input-hours-total"
                 />
               </div>
@@ -320,27 +372,29 @@ export default function WeeklyGoalTracker() {
               {/* Thank You Cards/Gifts */}
               <div className="space-y-2 mb-4">
                 <Label className="text-sm font-semibold">Thank You Cards/Gifts</Label>
-                {[1, 2].map((num) => (
-                  <div key={num} className="grid grid-cols-8 gap-2 items-center">
-                    <div className="text-sm text-muted-foreground">{num}</div>
-                    {days.map((day, idx) => (
+                {[0, 1].map((rowIndex) => (
+                  <div key={rowIndex} className="grid grid-cols-8 gap-2 items-center">
+                    <div className="text-sm text-muted-foreground">{rowIndex + 1}</div>
+                    {days.map((day, dayIndex) => (
                       <Input
-                        key={`ty-${num}-${day}`}
+                        key={`ty-${rowIndex}-${day}`}
                         type="number"
                         min="0"
                         step="0.1"
+                        value={dailyValues.thankyouCards[dayIndex][rowIndex] || ''}
+                        onChange={(e) => updateDailyValue('thankyouCards', dayIndex, e.target.value, rowIndex)}
                         className="h-9 text-center"
                         placeholder="0"
-                        disabled
-                        data-testid={`input-thankyou-${num}-${idx}`}
+                        data-testid={`input-thankyou-${rowIndex + 1}-${dayIndex}`}
                       />
                     ))}
                     <Input
                       type="number"
                       className="h-9 text-center font-mono font-semibold bg-muted"
+                      value={dailyValues.thankyouCards.reduce((sum, day) => sum + day[rowIndex], 0) || ''}
                       placeholder="0"
                       disabled
-                      data-testid={`input-thankyou-total-${num}`}
+                      data-testid={`input-thankyou-total-${rowIndex + 1}`}
                     />
                   </div>
                 ))}
@@ -364,24 +418,25 @@ export default function WeeklyGoalTracker() {
               {/* Leads Received */}
               <div className="grid grid-cols-8 gap-2 items-center mb-4">
                 <Label className="text-sm font-semibold">Leads Received</Label>
-                {days.map((day, idx) => (
+                {days.map((day, dayIndex) => (
                   <Input
                     key={`leads-${day}`}
                     type="number"
                     min="0"
                     step="1"
+                    value={dailyValues.leadsReceived[dayIndex] || ''}
+                    onChange={(e) => updateDailyValue('leadsReceived', dayIndex, e.target.value)}
                     className="h-9 text-center"
                     placeholder="0"
-                    disabled
-                    data-testid={`input-leads-${idx}`}
+                    data-testid={`input-leads-${dayIndex}`}
                   />
                 ))}
                 <Input
                   type="number"
-                  value={goals.leadsReceived}
-                  onChange={(e) => updateGoal("leadsReceived", e.target.value)}
-                  className="h-9 text-center font-mono font-semibold"
+                  value={goals.leadsReceived || ''}
+                  className="h-9 text-center font-mono font-semibold bg-muted"
                   placeholder="0"
+                  disabled
                   data-testid="input-leads-total"
                 />
               </div>
